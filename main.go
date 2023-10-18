@@ -63,6 +63,7 @@ func checkSign(msg, sig []byte) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("error in checksig while getting signature of the message %w", err)
 	}
+
 	same := hmac.Equal(newSig, sig)
 	return same, nil
 }
