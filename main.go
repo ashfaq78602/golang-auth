@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 )
 
 type Person struct {
@@ -35,4 +36,16 @@ func main() {
 	}
 
 	fmt.Println("Back to GO Data: ", xp2)
+
+	http.HandleFunc("/encode", foo)
+	http.HandleFunc("/decode", bar)
+	http.ListenAndServe(":8080", nil)
+}
+
+func foo(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func bar(w http.ResponseWriter, r *http.Request) {
+
 }
