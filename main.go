@@ -1,41 +1,42 @@
 package main
 
 import (
-	"encoding/json"
+	"fmt"
 	"log"
-	"net/http"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
-type Person struct {
-	First string `json:"first"`
-}
-
 func main() {
-	http.HandleFunc("/encode", foo)
-	http.HandleFunc("/decode", bar)
-	http.ListenAndServe(":8080", nil)
+
+	pass := "123456789"
+
+	hashPass, err := hashPassword(pass)
+	if err != nil {
+		panic(err)
+	}
+
+	err = comparePassword(pass, hashPass)
+	if err != nil {
+		log.Fatalf("Not logged in")
+	}
+
+	log.Println("Logged IN!!!")
+
 }
 
-func foo(w http.ResponseWriter, r *http.Request) {
-	p1 := Person{
-		First: "Ashfaq",
-	}
-	p2 := Person{
-		First: "Reynis",
-	}
-	people := []Person{p1, p2}
-
-	err := json.NewEncoder(w).Encode(people)
+func hashPassword(password string) ([]byte, error) {
+	bs, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Println("Bad data is encoded", err)
+		return nil, fmt.Errorf("error while generating hash from password %w", err)
 	}
+	return bs, nil
 }
 
-func bar(w http.ResponseWriter, r *http.Request) {
-	people := []Person{}
-	err := json.NewDecoder(r.Body).Decode(&people)
+func comparePassword(password string, hashedPass []byte) error {
+	err := bcrypt.CompareHashAndPassword(hashedPass, []byte(password))
 	if err != nil {
-		log.Println("Bad decoded data", err)
+		return err
 	}
-	log.Println(people)
+	return nil
 }
