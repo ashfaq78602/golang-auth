@@ -4,4 +4,7 @@ go 1.21.2
 
 require golang.org/x/crypto v0.14.0
 
-require github.com/dgrijalva/jwt-go v3.2.0+incompatible
+require (
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/gofrs/uuid v4.4.0+incompatible
+)
