@@ -1,60 +1,38 @@
 package main
 
 import (
-	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"log"
-
-	"golang.org/x/crypto/bcrypt"
+	"os"
 )
 
 func main() {
-	msg := "Hello. I am happy to learning things really hands-on and thank you for sharing this info with me. I am really grateful and this will go a long way in helping me understand the basics of encryption. Lets gets started."
-
-	password := "ilovecats"
-	b, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	f, err := os.Open("sample.txt")
 	if err != nil {
-		log.Panic("couldn't decrypt password")
+		log.Fatalln(err)
 	}
-	bs := b[:16]
-	rslt, err := enDecode(bs, msg)
+	defer f.Close()
+
+	h := sha256.New()
+
+	_, err = io.Copy(h, f)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln("couldnt io.copy: ", err)
 	}
 
-	fmt.Println(rslt)
+	fmt.Printf("Here's the type before Sum: %T\n", h)
+	fmt.Printf("%v\n", h)
+	sb := h.Sum(nil)
+	fmt.Printf("Here's the type after Sum: %T\n", sb)
+	fmt.Printf("%x\n", sb)
 
-	rslt2, err := enDecode(bs, string(rslt))
-	if err != nil {
-		log.Fatal(err)
-	}
+	sb = h.Sum(nil)
+	fmt.Printf("Here's the type after second Sum: %T\n", sb)
+	fmt.Printf("%x\n", sb)
 
-	fmt.Println(string(rslt2))
-}
-
-func enDecode(key []byte, input string) ([]byte, error) {
-	b, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't newciper %w", err)
-	}
-
-	//initialization vector
-	iv := make([]byte, aes.BlockSize)
-
-	//create a cipher
-	s := cipher.NewCTR(b, iv)
-
-	buff := &bytes.Buffer{}
-	sw := cipher.StreamWriter{
-		S: s,
-		W: buff,
-	}
-	_, err = sw.Write([]byte(input))
-	if err != nil {
-		return nil, fmt.Errorf("couldn't sw.Write to streamwriter %w", err)
-	}
-
-	return buff.Bytes(), nil
+	sb = h.Sum(sb)
+	fmt.Printf("Here's the type after third Sum and passing in sb: %T\n", sb)
+	fmt.Printf("%x\n", sb)
 }
