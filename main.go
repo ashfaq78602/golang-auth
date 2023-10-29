@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 func main() {
@@ -20,6 +21,21 @@ func foo(w http.ResponseWriter, r *http.Request) {
 		c = &http.Cookie{}
 	}
 
+	isEqual := true
+	xs := strings.SplitN(c.Value, "|", 2)
+	if len(xs) == 2 {
+		cCode := xs[0]
+		cEmail := xs[1]
+
+		code := getCode(cEmail)
+		isEqual = hmac.Equal([]byte(code), []byte(cCode))
+	}
+
+	message := "Not logged in!!!"
+	if isEqual {
+		message = "Logged in"
+	}
+
 	html := `<!DOCTYPE html>
 	<html lang="en">
 	<head>
@@ -29,7 +45,8 @@ func foo(w http.ResponseWriter, r *http.Request) {
 	</head>
 	<body>
 		<p> Cookie value:` + c.Value + `</p>
-		<form action="/sumit" method="post">
+		<p> Message: ` + message + `</p>
+		<form action="/submit" method="post">
 			<input type="email" name="email"/>
 			<input type="submit" />
 		</form>
@@ -65,5 +82,6 @@ func bar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &c)
+	//fmt.Printf("%v", c.Value)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
