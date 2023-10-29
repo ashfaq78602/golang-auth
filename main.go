@@ -1,13 +1,20 @@
 package main
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
+
+type myClaims struct {
+	jwt.StandardClaims
+	Email string
+}
+
+const myKey = "i love thursdays when it rains 8273 inches"
 
 func main() {
 	http.HandleFunc("/", foo)
@@ -21,19 +28,31 @@ func foo(w http.ResponseWriter, r *http.Request) {
 		c = &http.Cookie{}
 	}
 
-	isEqual := true
-	xs := strings.SplitN(c.Value, "|", 2)
-	if len(xs) == 2 {
-		cCode := xs[0]
-		cEmail := xs[1]
+	ss := c.Value
+	afterVerificationToken, err := jwt.ParseWithClaims(ss, &myClaims{}, func(beforeVerificationToken *jwt.Token) (interface{}, error) {
+		return []byte(myKey), nil
+	})
 
-		code := getCode(cEmail)
-		isEqual = hmac.Equal([]byte(code), []byte(cCode))
+	// Standard claims has the Valid() error method
+	// which means it implements the claims interface
+
+	/* type Claims struct {
+		Valid() error
 	}
+	*/
+	// when you parseClaims as with "ParseWithClaims"
+	// the Valid() method gets run
+	// and if all is well, it returns no error and
+	// type TOKEN which has field VALID will be true
+
+	isEqual := afterVerificationToken.Valid && err == nil
 
 	message := "Not logged in!!!"
 	if isEqual {
 		message = "Logged in"
+		claims := afterVerificationToken.Claims.(*myClaims)
+		fmt.Println(claims.Email)
+		fmt.Println(claims.ExpiresAt)
 	}
 
 	html := `<!DOCTYPE html>
@@ -56,10 +75,22 @@ func foo(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, html)
 }
 
-func getCode(msg string) string {
-	h := hmac.New(sha256.New, []byte("i love thursdays when it rains 8237 inches"))
-	h.Write([]byte(msg))
-	return fmt.Sprintf("%x", h.Sum(nil))
+func getJWT(msg string) (string, error) {
+	claims := myClaims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
+		},
+		Email: msg,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
+	ss, err := token.SignedString([]byte(myKey))
+
+	if err != nil {
+		return "", fmt.Errorf("Couldnt get signed string in NewWithClaims %v", err)
+	}
+	return ss, nil
+
 }
 
 func bar(w http.ResponseWriter, r *http.Request) {
@@ -74,11 +105,15 @@ func bar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code := getCode(email)
+	ss, err := getJWT(email)
+	if err != nil {
+		http.Error(w, "couldnt getJWT", http.StatusInternalServerError)
+		return
+	}
 
 	c := http.Cookie{
 		Name:  "session",
-		Value: code + "|" + email,
+		Value: ss,
 	}
 
 	http.SetCookie(w, &c)
