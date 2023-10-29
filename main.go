@@ -2,121 +2,76 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"log"
 	"net/http"
-	"time"
+	"net/url"
 
-	"github.com/dgrijalva/jwt-go"
+	"golang.org/x/crypto/bcrypt"
 )
 
-type myClaims struct {
-	jwt.StandardClaims
-	Email string
-}
-
-const myKey = "i love thursdays when it rains 8273 inches"
+var db = map[string][]byte{}
 
 func main() {
-	http.HandleFunc("/", foo)
-	http.HandleFunc("/submit", bar)
+	http.HandleFunc("/", index)
+	http.HandleFunc("/register", register)
 	http.ListenAndServe(":8080", nil)
 }
 
-func foo(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie("session")
-	if err != nil {
-		c = &http.Cookie{}
-	}
-
-	ss := c.Value
-	afterVerificationToken, err := jwt.ParseWithClaims(ss, &myClaims{}, func(beforeVerificationToken *jwt.Token) (interface{}, error) {
-		return []byte(myKey), nil
-	})
-
-	// Standard claims has the Valid() error method
-	// which means it implements the claims interface
-
-	/* type Claims struct {
-		Valid() error
-	}
-	*/
-	// when you parseClaims as with "ParseWithClaims"
-	// the Valid() method gets run
-	// and if all is well, it returns no error and
-	// type TOKEN which has field VALID will be true
-
-	isEqual := afterVerificationToken.Valid && err == nil
-
-	message := "Not logged in!!!"
-	if isEqual {
-		message = "Logged in"
-		claims := afterVerificationToken.Claims.(*myClaims)
-		fmt.Println(claims.Email)
-		fmt.Println(claims.ExpiresAt)
-	}
-
-	html := `<!DOCTYPE html>
+func index(w http.ResponseWriter, r *http.Request) {
+	errMsg := r.FormValue("errormsg")
+	fmt.Fprintf(w, `<!DOCTYPE html>
 	<html lang="en">
 	<head>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>HMAC Example</title>
+		<title>Document</title>
 	</head>
 	<body>
-		<p> Cookie value:` + c.Value + `</p>
-		<p> Message: ` + message + `</p>
-		<form action="/submit" method="post">
-			<input type="email" name="email"/>
-			<input type="submit" />
+		<h1>IF THERE WAS ANY ERROR, HERE IT IS: %s</h1>
+		<form action="/register" method="post">
+			Email:<input type="email" name="email" id="email"><br>
+			Password:<input type="password" name="password" id="password"><br>
+			<input type="submit">
 		</form>
 	</body>
-	</html>`
-
-	io.WriteString(w, html)
+	</html>`, errMsg)
 }
 
-func getJWT(msg string) (string, error) {
-	claims := myClaims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
-		},
-		Email: msg,
-	}
+func register(w http.ResponseWriter, r *http.Request) {
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
-	ss, err := token.SignedString([]byte(myKey))
-
-	if err != nil {
-		return "", fmt.Errorf("Couldnt get signed string in NewWithClaims %v", err)
-	}
-	return ss, nil
-
-}
-
-func bar(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		errorMsg := url.QueryEscape("Your method was not post")
+		http.Redirect(w, r, "/?errormsg"+errorMsg, http.StatusSeeOther)
+		return
+		//RETURN must be explicitly used
+		//since rediret just sets up the response
+		//to redirect the client
+		//only after return
+		//client is usually redirected to the site
+	}
+
+	e := r.FormValue("email")
+	if e == "" {
+		errorMsg := url.QueryEscape("Your email was empty. It must not be empty")
+		http.Redirect(w, r, "/?errormsg"+errorMsg, http.StatusSeeOther)
+		return
+	}
+	p := r.FormValue("password")
+	if p == "" {
+		errorMsg := url.QueryEscape("Your password was empty. It must not be empty.")
+		http.Redirect(w, r, "/?errormsg"+errorMsg, http.StatusSeeOther)
 		return
 	}
 
-	email := r.FormValue("email")
-	if email == "" {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-
-	ss, err := getJWT(email)
+	bsp, err := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "couldnt getJWT", http.StatusInternalServerError)
+		errorMsg := "There was an internal server error."
+		http.Error(w, errorMsg, http.StatusInternalServerError)
 		return
 	}
+	log.Println("password", e)
+	log.Println("brcypted", bsp)
+	db[e] = bsp
 
-	c := http.Cookie{
-		Name:  "session",
-		Value: ss,
-	}
-
-	http.SetCookie(w, &c)
-	//fmt.Printf("%v", c.Value)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
