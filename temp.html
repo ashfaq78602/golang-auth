@@ -1,15 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    <form action="/register" method="post">
-        <input type="email" name="email" id="email">
-        <input type="password" name="password" id="password">
-        <input type="submit">
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Document</title>
+	</head>
+	<body>
+		<h1>IF THERE WAS ANY ERROR, HERE IT IS: %s</h1>
+        <h2>REGISTER</h2>
+		<form action="/register" method="post">
+			Email:<input type="email" name="email" id="email"><br>
+			Password:<input type="password" name="password" id="password"><br>
+			<input type="submit">
+		</form>
+	</body>
+    <h1>LOG IN</h1>
+    <form action="/login" method="post">
+        Email: <input type="email" name="email" id=""><br>
+        Password: <input type="password" name="password" id=""><br>
+        <input type="submit" value="">
     </form>
-</body>
-</html>
+	</html>

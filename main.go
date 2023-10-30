@@ -14,12 +14,13 @@ var db = map[string][]byte{}
 func main() {
 	http.HandleFunc("/", index)
 	http.HandleFunc("/register", register)
+	http.HandleFunc("/login", login)
 	http.ListenAndServe(":8080", nil)
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
-	errMsg := r.FormValue("errormsg")
-	fmt.Fprintf(w, `<!DOCTYPE html>
+	errMsg := r.FormValue("msg")
+	fmt.Fprint(w, `<!DOCTYPE html>
 	<html lang="en">
 	<head>
 		<meta charset="UTF-8">
@@ -27,21 +28,28 @@ func index(w http.ResponseWriter, r *http.Request) {
 		<title>Document</title>
 	</head>
 	<body>
-		<h1>IF THERE WAS ANY ERROR, HERE IT IS: %s</h1>
-		<form action="/register" method="post">
-			Email:<input type="email" name="email" id="email"><br>
-			Password:<input type="password" name="password" id="password"><br>
+		<h1>IF THERE WAS ANY MESSAGE, HERE IT IS:`, errMsg, `</h1>
+        <h2>REGISTER</h2>
+		<form action="/register" method="POST">
+			<input type="email" name="email"><br>
+			<input type="password" name="password"><br>
 			<input type="submit">
 		</form>
+    <h1>LOG IN</h1>
+    <form action="/login" method="POST">
+        <input type="email" name="email" id=""><br>
+        <input type="password" name="password" id=""><br>
+        <input type="submit">
+    </form>
 	</body>
-	</html>`, errMsg)
+	</html>`)
 }
 
 func register(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
-		errorMsg := url.QueryEscape("Your method was not post")
-		http.Redirect(w, r, "/?errormsg"+errorMsg, http.StatusSeeOther)
+		msg := url.QueryEscape("Your method was not post")
+		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
 		return
 		//RETURN must be explicitly used
 		//since rediret just sets up the response
@@ -52,21 +60,21 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 	e := r.FormValue("email")
 	if e == "" {
-		errorMsg := url.QueryEscape("Your email was empty. It must not be empty")
-		http.Redirect(w, r, "/?errormsg"+errorMsg, http.StatusSeeOther)
+		msg := url.QueryEscape("Your email was empty. It must not be empty")
+		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
 		return
 	}
 	p := r.FormValue("password")
 	if p == "" {
-		errorMsg := url.QueryEscape("Your password was empty. It must not be empty.")
-		http.Redirect(w, r, "/?errormsg"+errorMsg, http.StatusSeeOther)
+		msg := url.QueryEscape("Your password was empty. It must not be empty.")
+		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
 		return
 	}
 
 	bsp, err := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
 	if err != nil {
-		errorMsg := "There was an internal server error."
-		http.Error(w, errorMsg, http.StatusInternalServerError)
+		msg := "There was an internal server error."
+		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
 	log.Println("password", e)
@@ -74,4 +82,47 @@ func register(w http.ResponseWriter, r *http.Request) {
 	db[e] = bsp
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func login(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		msg := url.QueryEscape("Your method was not post")
+		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
+		return
+		//RETURN must be explicitly used
+		//since rediret just sets up the response
+		//to redirect the client
+		//only after return
+		//client is usually redirected to the site
+	}
+
+	e := r.FormValue("email")
+	if e == "" {
+		msg := url.QueryEscape("Your email was empty. It must not be empty")
+		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
+		return
+	}
+	p := r.FormValue("password")
+	if p == "" {
+		msg := url.QueryEscape("Your password was empty. It must not be empty.")
+		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
+		return
+	}
+
+	if _, ok := db[e]; !ok {
+		msg := url.QueryEscape("Your email and password didn't match.")
+		http.Redirect(w, r, "/?msg"+msg, http.StatusSeeOther)
+		return
+	}
+
+	err := bcrypt.CompareHashAndPassword(db[e], []byte(p))
+	if err != nil {
+		msg := url.QueryEscape("Your email or password didn't match.")
+		http.Redirect(w, r, "/msg="+msg, http.StatusSeeOther)
+		return
+	}
+
+	msg := url.QueryEscape("You logged in " + e)
+	http.Redirect(w, r, "/msg="+msg, http.StatusSeeOther)
+
 }
