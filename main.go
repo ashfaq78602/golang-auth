@@ -10,10 +10,13 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
+// key is email, value is password
 var db = map[string][]byte{}
+var session = map[string]string{}
 
 var key = []byte("my secret key 007 james bond rule the world")
 
@@ -25,6 +28,24 @@ func main() {
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("sessionID")
+	if err != nil {
+		c = &http.Cookie{
+			Name:  "sessionID",
+			Value: "",
+		}
+	}
+
+	s, err := parseToken(c.Value)
+	if err != nil {
+		log.Println("Index parseToken", err)
+	}
+
+	var e string
+	if s != "" {
+		e = session[s]
+	}
+
 	errMsg := r.FormValue("msg")
 	fmt.Fprint(w, `<!DOCTYPE html>
 	<html lang="en">
@@ -34,6 +55,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 		<title>Document</title>
 	</head>
 	<body>
+		<h1>IF YOU HAVE A SESSION, HERE IS YOUR EMAIL:`, e, `</h1>
 		<h1>IF THERE WAS ANY MESSAGE, HERE IT IS:`, errMsg, `</h1>
         <h2>REGISTER</h2>
 		<form action="/register" method="POST">
@@ -128,6 +150,17 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sUUID := uuid.New().String()
+	session[sUUID] = e
+	token := createToken(sUUID)
+
+	c := http.Cookie{
+		Name:  "sessionID",
+		Value: token,
+	}
+
+	http.SetCookie(w, &c)
+
 	msg := url.QueryEscape("You logged in " + e)
 	http.Redirect(w, r, "/msg="+msg, http.StatusSeeOther)
 }
@@ -163,7 +196,7 @@ func parseToken(ss string) (string, error) {
 
 	ok := hmac.Equal(xb, mac.Sum(nil))
 	if !ok {
-		return "" , fmt.Errorf("Couldnt parseToken not equal signed sid")
+		return "", fmt.Errorf("Couldnt parseToken not equal signed sid")
 	}
 	return xs[1], nil
 }
