@@ -1,15 +1,14 @@
 package main
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
-	"strings"
+	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -17,6 +16,11 @@ import (
 type user struct {
 	password []byte
 	First    string
+}
+
+type customClaims struct {
+	jwt.StandardClaims
+	SID string
 }
 
 // key is email, value is user
@@ -41,14 +45,14 @@ func index(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s, err := parseToken(c.Value)
+	sID, err := parseToken(c.Value)
 	if err != nil {
 		log.Println("Index parseToken", err)
 	}
 
 	var e string
-	if s != "" {
-		e = session[s]
+	if sID != "" {
+		e = session[sID]
 	}
 
 	var f string
@@ -174,7 +178,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	sUUID := uuid.New().String()
 	session[sUUID] = e
-	token := createToken(sUUID)
+	token, err := createToken(sUUID)
+	if err != nil {
+		log.Println("Couldn't createToken in login", err)
+		msg := url.QueryEscape("Our server didnt get enough. Try Again.")
+		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
+		return
+	}
 
 	c := http.Cookie{
 		Name:  "sessionID",
@@ -187,38 +197,68 @@ func login(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/msg="+msg, http.StatusSeeOther)
 }
 
-func createToken(sid string) string {
-	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(sid))
+func createToken(sid string) (string, error) {
+	cc := customClaims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(10 * time.Minute).Unix(),
+		},
+		SID: sid,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, cc)
+	st, err := token.SignedString(key)
+	if err != nil {
+		return "", fmt.Errorf("coudln't sign token in createToken %w", err)
+	}
+	return st, nil
+
+	// mac := hmac.New(sha256.New, key)
+	// mac.Write([]byte(sid))
 	//to hex
 	//signedMac := fmt.Sprintf("%x", mac.Sum(nil))
 
 	//to base64
-	signedMac := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	//signedSessionID as base64 | created from sid
-	return signedMac + "|" + sid
+	// signedMac := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	// //signedSessionID as base64 | created from sid
+	// return signedMac + "|" + sid
 }
 
-func parseToken(ss string) (string, error) {
-	xs := strings.SplitN(ss, "|", 2)
-	if len(xs) != 2 {
-		return "", fmt.Errorf("Wrong number of items in string parseToken")
-	}
+func parseToken(st string) (string, error) {
+	token, err := jwt.ParseWithClaims(st, &customClaims{}, func(t *jwt.Token) (interface{}, error) {
+		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, errors.New("parseWithClaims different algorithms used.")
+		}
+		return key, nil
+	})
 
-	//SIGNEDSESSIONID AS BASE64 | Created from sId
-	b64 := xs[0]
-	xb, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
-		return "", fmt.Errorf("Couldnt parseToken decodestring: %w", err)
+		return "", fmt.Errorf("couldn't parseWithClaims in parseToken %w", err)
 	}
 
-	//signedSessionID as base64 | CREATED FROM SID
-	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(xs[1]))
-
-	ok := hmac.Equal(xb, mac.Sum(nil))
-	if !ok {
-		return "", fmt.Errorf("Couldnt parseToken not equal signed sid")
+	if !token.Valid {
+		return "", fmt.Errorf("couldn't parseWithClaims in parseToken")
 	}
-	return xs[1], nil
+
+	return token.Claims.(*customClaims).SID, nil
+
+	// xs := strings.SplitN(st, "|", 2)
+	// if len(xs) != 2 {
+	// 	return "", fmt.Errorf("Wrong number of items in string parseToken")
+	// }
+
+	// //SIGNEDSESSIONID AS BASE64 | Created from sId
+	// b64 := xs[0]
+	// xb, err := base64.StdEncoding.DecodeString(b64)
+	// if err != nil {
+	// 	return "", fmt.Errorf("Couldnt parseToken decodestring: %w", err)
+	// }
+
+	// // //signedSessionID as base64 | CREATED FROM SID
+	// mac := hmac.New(sha256.New, key)
+	// mac.Write([]byte(xs[1]))
+
+	// ok := hmac.Equal(xb, mac.Sum(nil))
+	// if !ok {
+	// 	return "", fmt.Errorf("Couldnt parseToken not equal signed sid")
+	// }
+	// return xs[1], nil
 }
