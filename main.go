@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +11,17 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 )
+
+// key is github ID
+var githubConnections map[string]string
+
+type githubResponse struct {
+	Data struct {
+		Viewer struct {
+			ID string `json:id`
+		} `json:viewer`
+	} `json:data`
+}
 
 var githubOauthConfig = &oauth2.Config{
 	ClientID:     "d2144988e98dad39a078",
@@ -78,4 +90,20 @@ func completeGithubOauth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println(string(bs))
+
+	var gr githubResponse
+	err = json.NewDecoder(resp.Body).Decode(&gr)
+	if err != nil {
+		http.Error(w, "Github invalid response", http.StatusInternalServerError)
+		return
+	}
+
+	githubID := gr.Data.Viewer.ID
+	userID, ok := githubConnections[githubID]
+	if !ok {
+		//New User - Create Account
+		//Maybe return, maybe not
+	}
+
+	//Login to account userID using JWT
 }
