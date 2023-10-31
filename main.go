@@ -14,8 +14,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// key is email, value is password
-var db = map[string][]byte{}
+type user struct {
+	password []byte
+	First    string
+}
+
+// key is email, value is user
+var db = map[string]user{}
 var session = map[string]string{}
 
 var key = []byte("my secret key 007 james bond rule the world")
@@ -46,6 +51,11 @@ func index(w http.ResponseWriter, r *http.Request) {
 		e = session[s]
 	}
 
+	var f string
+	if user, ok := db[e]; ok {
+		f = user.First
+	}
+
 	errMsg := r.FormValue("msg")
 	fmt.Fprint(w, `<!DOCTYPE html>
 	<html lang="en">
@@ -56,9 +66,12 @@ func index(w http.ResponseWriter, r *http.Request) {
 	</head>
 	<body>
 		<h1>IF YOU HAVE A SESSION, HERE IS YOUR EMAIL:`, e, `</h1>
+		<h1>IF YOU HAVE A SESSION, HERE IS YOUR NAME:`, f, `</h1>
 		<h1>IF THERE WAS ANY MESSAGE, HERE IT IS:`, errMsg, `</h1>
         <h2>REGISTER</h2>
 		<form action="/register" method="POST">
+			<label for = "first">First</label>
+			<input type="text" name="first" placeholder="First" id ="first"><br>
 			<input type="email" name="email"><br>
 			<input type="password" name="password"><br>
 			<input type="submit">
@@ -98,6 +111,12 @@ func register(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
 		return
 	}
+	f := r.FormValue("first")
+	if f == "" {
+		msg := url.QueryEscape("Your first name was empty. It must not be empty.")
+		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
+		return
+	}
 
 	bsp, err := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
 	if err != nil {
@@ -107,7 +126,10 @@ func register(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Println("password", e)
 	log.Println("brcypted", bsp)
-	db[e] = bsp
+	db[e] = user{
+		password: bsp,
+		First:    f,
+	}
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -143,7 +165,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := bcrypt.CompareHashAndPassword(db[e], []byte(p))
+	err := bcrypt.CompareHashAndPassword(db[e].password, []byte(p))
 	if err != nil {
 		msg := url.QueryEscape("Your email or password didn't match.")
 		http.Redirect(w, r, "/msg="+msg, http.StatusSeeOther)
